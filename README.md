@@ -18,25 +18,25 @@ The earlier project implemented the same Priority 1/2/3 fault model against **si
 ## Architecture
 
 ```
-┌─────────────────────────┐     ┌─────────────────────────────┐
+┌──────────────────────────┐     ┌───────────────────────────────┐
 │  OBS Source #1           │     │  OBS Source #2                │
 │  (Webcam → DistroAV      │     │  (Screen Capture → DistroAV   │
 │   Main Output)           │     │   NDI Filter, distinct name)  │
-└────────────┬─────────────┘     └────────────────┬───────────────┘
+└────────────┬─────────────┘     └─────────────────┬─────────────┘
              │                                     │
-             └──────────────────┬──────────────────┘
+             └───────────────────┬─────────────────┘
                                  │      (LAN, NDI protocol)
                                  ▼
-         ┌─────────────────────────────────┐
+         ┌──────────────────────────────────┐
          │  ingest_worker.py                │
          │  (continuous background thread,  │
          │   started by FastAPI on startup) │
-         │  → CyndilibSourceProvider         │
-         │    (ingest_batch.py)              │
-         └────────────────┬─────────────────┘
+         │  → CyndilibSourceProvider        │
+         │    (ingest_batch.py)             │
+         └─────────────────┬────────────────┘
                            │
                            ▼
-         ┌─────────────────────────────────┐
+         ┌──────────────────────────────────┐
          │  ingest_core.py                  │
          │  build_health_report()           │
          │        │                         │
@@ -45,33 +45,33 @@ The earlier project implemented the same Priority 1/2/3 fault model against **si
          │  (Priority 1/2/3, signal vs      │
          │   timing faults, kept separate   │
          │   then merged)                   │
-         └────────────────┬─────────────────┘
+         └─────────────────┬────────────────┘
                            │
               ┌────────────┴────────────┐
               ▼                         ▼
-   ┌─────────────────┐       ┌─────────────────┐
+   ┌──────────────────┐       ┌──────────────────┐
    │  Redis           │       │  SQLite (db.py)  │
    │  (live state,    │       │  (fault history, │
-   │   tally state)   │       │   source records) │
+   │   tally state)   │       │  source records) │
    └────────┬─────────┘       └────────┬─────────┘
             │                          │
             └────────────┬─────────────┘
                           ▼
-         ┌─────────────────────────────────┐
+         ┌──────────────────────────────────┐
          │  main.py (FastAPI)               │
-         │  - REST: /sources, /tally         │
-         │  - SSE: /stream                   │
-         │  - Switcher control (PGM/PVW)     │
+         │  - REST: /sources, /tally        │
+         │  - SSE: /stream                  │
+         │  - Switcher control (PGM/PVW)    │
          └────────────────┬─────────────────┘
                            │
                            ▼
-         ┌─────────────────────────────────┐
+         ┌──────────────────────────────────┐
          │  dashboard.html                  │
          │  (React via CDN, no build step)  │
          │  - Live source tiles             │
          │  - PGM/PVW switcher UI           │
          │  - Fault log + severity badges   │
-         └─────────────────────────────────┘
+         └──────────────────────────────────┘
 ```
 
 ## Project structure
