@@ -1,0 +1,49 @@
+name: CI
+
+# Deliberately does NOT install cyndilib or touch real NDI sources --
+# GitHub-hosted runners have no local network with NDI devices on it,
+# so live discovery/capture cannot run here. This pipeline tests
+# everything that doesn't require real hardware: the fault classifier
+# (pure logic) and the full ingest pipeline against a fixture-based
+# SourceProvider, using a real Redis service container (which CI CAN
+# run, unlike NDI) and a throwaway SQLite file.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies (no cyndilib -- not needed for these tests)
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest redis fastapi
+
+      - name: Run fault classifier unit tests (pure logic, no services needed)
+        run: pytest test_fault_classifier.py -v
+
+      - name: Run ingest pipeline integration tests (fixture-based, real Redis + SQLite)
+        run: pytest test_ingest_pipeline.py -v
