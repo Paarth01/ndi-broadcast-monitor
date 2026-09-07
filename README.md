@@ -55,14 +55,14 @@ The earlier project implemented the same Priority 1/2/3 fault model against **si
    │   tally state)   │       │  source records) │
    └────────┬─────────┘       └────────┬─────────┘
             │                          │
-            └────────────┬─────────────┘
+            └─────────────┬────────────┘
                           ▼
          ┌──────────────────────────────────┐
          │  main.py (FastAPI)               │
          │  - REST: /sources, /tally        │
          │  - SSE: /stream                  │
          │  - Switcher control (PGM/PVW)    │
-         └────────────────┬─────────────────┘
+         └─────────────────┬────────────────┘
                            │
                            ▼
          ┌──────────────────────────────────┐
