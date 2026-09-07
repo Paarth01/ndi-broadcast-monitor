@@ -1,0 +1,38 @@
+# Only Redis is containerized here, deliberately.
+#
+# The FastAPI app itself depends on cyndilib/NDI discovery, which needs
+# direct access to the host's LAN for mDNS-based source discovery.
+# Docker's network isolation (especially on Windows/Docker Desktop)
+# actively interferes with this -- containerizing the ingest worker
+# would trade a working NDI connection for a "looks more containerized"
+# demo that doesn't actually discover sources.
+#
+# On Linux, the app CAN be containerized with `network_mode: host` (see
+# the commented-out service below) since host networking works
+# natively there. On Windows/Mac, run the app with `uvicorn` directly
+# on the host and only use this compose file for Redis.
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Uncomment on Linux only -- host networking is required for NDI
+  # mDNS discovery to work from inside the container, and this mode
+  # is not fully supported the same way on Docker Desktop for Windows/Mac.
+  #
+  # app:
+  #   build: .
+  #   network_mode: host
+  #   depends_on:
+  #     - redis
+  #   environment:
+  #     - NDI_MONITOR_DB_PATH=/data/ndi_monitor.db
+  #   volumes:
+  #     - ./data:/data
