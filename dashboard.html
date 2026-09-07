@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>NDI Broadcast Signal Monitor</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2f3a;
+    --text: #e6e8eb;
+    --text-dim: #9aa0ab;
+    --healthy: #2ecc71;
+    --p3: #f1c40f;
+    --p2: #e67e22;
+    --p1: #e74c3c;
+    --pgm: #e74c3c;
+    --pvw: #3498db;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+  }
+  .tile {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    position: relative;
+  }
+  .tile.is-pgm { border-color: var(--pgm); box-shadow: 0 0 0 1px var(--pgm); }
+  .tile.is-pvw { border-color: var(--pvw); box-shadow: 0 0 0 1px var(--pvw); }
+  .tile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  .source-name { font-size: 14px; font-weight: 600; word-break: break-word; padding-right: 8px; }
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    color: #0f1115;
+    white-space: nowrap;
+  }
+  .badge.healthy { background: var(--healthy); }
+  .badge.P3 { background: var(--p3); }
+  .badge.P2 { background: var(--p2); color: #fff; }
+  .badge.P1 { background: var(--p1); color: #fff; }
+  .metrics { font-size: 12px; color: var(--text-dim); line-height: 1.8; }
+  .metrics b { color: var(--text); font-weight: 500; }
+  .tags { display: flex; gap: 6px; margin-top: 10px; }
+  .tag {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .tag.pgm { background: var(--pgm); color: #fff; }
+  .tag.pvw { background: var(--pvw); color: #fff; }
+  .actions { display: flex; gap: 8px; margin-top: 14px; }
+  button {
+    flex: 1;
+    background: #232733;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  button:hover { background: #2c303d; }
+  button.set-pgm:hover { background: var(--pgm); border-color: var(--pgm); }
+  button.set-pvw:hover { background: var(--pvw); border-color: var(--pvw); }
+  .faults-panel {
+    margin-top: 14px;
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .fault-row {
+    font-size: 11px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .fault-row:last-child { border-bottom: none; }
+  .fault-row .sev { font-weight: 700; margin-right: 6px; }
+  .fault-row .sev.P1 { color: var(--p1); }
+  .fault-row .sev.P2 { color: var(--p2); }
+  .fault-row .sev.P3 { color: var(--p3); }
+  .empty-faults { font-size: 11px; color: var(--text-dim); font-style: italic; }
+  .conn-status { font-size: 12px; margin-bottom: 16px; }
+  .conn-status.connected { color: var(--healthy); }
+  .conn-status.disconnected { color: var(--p1); }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+// Change this if your API runs somewhere other than the default.
+const API_BASE = "http://127.0.0.1:8000";
+
+function statusClass(status) {
+  return status === "healthy" ? "healthy" : status;
+}
+
+function SourceTile({ source, tally, onSetTally }) {
+  const [faults, setFaults] = useState(null);
+  const [showFaults, setShowFaults] = useState(false);
+
+  const isPgm = tally.pgm === source.source_name;
+  const isPvw = tally.pvw === source.source_name;
+
+  const loadFaults = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `${API_BASE}/sources/${encodeURIComponent(source.source_name)}/faults?limit=20`
+      );
+      const data = await res.json();
+      setFaults(data);
+    } catch (err) {
+      setFaults([]);
+    }
+  }, [source.source_name]);
+
+  const toggleFaults = () => {
+    const next = !showFaults;
+    setShowFaults(next);
+    if (next) loadFaults();
+  };
+
+  return (
+    <div className={`tile ${isPgm ? "is-pgm" : ""} ${isPvw ? "is-pvw" : ""}`}>
+      <div className="tile-header">
+        <div className="source-name">{source.source_name}</div>
+        <div className={`badge ${statusClass(source.status)}`}>
+          {source.status}
+        </div>
+      </div>
+
+      <div className="metrics">
+        <div>Resolution: <b>{source.resolution}</b></div>
+        <div>Avg interval: <b>{source.avg_interval_ms}ms</b></div>
+        <div>Frames: <b>{source.frames_captured}/{source.frames_attempted}</b></div>
+        <div>Fault count (last cycle): <b>{source.fault_count}</b></div>
+      </div>
+
+      {(isPgm || isPvw) && (
+        <div className="tags">
+          {isPgm && <span className="tag pgm">PGM</span>}
+          {isPvw && <span className="tag pvw">PVW</span>}
+        </div>
+      )}
+
+      <div className="actions">
+        <button className="set-pgm" onClick={() => onSetTally({ pgm: source.source_name })}>
+          Set PGM
+        </button>
+        <button className="set-pvw" onClick={() => onSetTally({ pvw: source.source_name })}>
+          Set PVW
+        </button>
+        <button onClick={toggleFaults}>
+          {showFaults ? "Hide faults" : "View faults"}
+        </button>
+      </div>
+
+      {showFaults && (
+        <div className="faults-panel">
+          {faults === null && <div className="empty-faults">Loading...</div>}
+          {faults && faults.length === 0 && (
+            <div className="empty-faults">No fault history recorded.</div>
+          )}
+          {faults && faults.map((f, i) => (
+            <div className="fault-row" key={i}>
+              <span className={`sev ${f.severity}`}>[{f.severity}]</span>
+              {f.fault_type}: {f.message}
+              <div style={{ opacity: 0.6, marginTop: 2 }}>{f.detected_at}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function App() {
+  const [sources, setSources] = useState([]);
+  const [tally, setTally] = useState({ pgm: null, pvw: null });
+  const [connected, setConnected] = useState(false);
+
+  useEffect(() => {
+    const es = new EventSource(`${API_BASE}/stream`);
+
+    es.onopen = () => setConnected(true);
+    es.onerror = () => setConnected(false);
+
+    es.onmessage = (event) => {
+      const payload = JSON.parse(event.data);
+      setSources(payload.sources || []);
+      setTally(payload.tally || { pgm: null, pvw: null });
+    };
+
+    return () => es.close();
+  }, []);
+
+  const handleSetTally = async (update) => {
+    try {
+      const res = await fetch(`${API_BASE}/tally`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(update),
+      });
+      const data = await res.json();
+      setTally(data);
+    } catch (err) {
+      console.error("Failed to set tally:", err);
+    }
+  };
+
+  return (
+    <div>
+      <h1>NDI Broadcast Signal Monitor</h1>
+      <div className="subtitle">
+        Live status from {API_BASE} -- updates every second via SSE
+      </div>
+      <div className={`conn-status ${connected ? "connected" : "disconnected"}`}>
+        {connected ? "● Connected to live stream" : "○ Disconnected -- check the API is running"}
+      </div>
+
+      {sources.length === 0 && (
+        <div style={{ color: "var(--text-dim)" }}>
+          No sources reporting yet. Confirm the backend is running and OBS/DistroAV outputs are active.
+        </div>
+      )}
+
+      <div className="grid">
+        {sources.map((source) => (
+          <SourceTile
+            key={source.source_name}
+            source={source}
+            tally={tally}
+            onSetTally={handleSetTally}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>
